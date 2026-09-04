@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>긴축재정 챌린지</title>
+    <!-- Tailwind CSS for Styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React and ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap');
+        
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: #f3f4f6;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #c1c1c1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8; 
+        }
+
+        .fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        const DEFAULT_CATEGORIES = ['식비', '간식', '교통', '쇼핑', '문화/여가', '생필품', '기타'];
+        const EMOJI_LIST = ['💻', '😊', '😎', '🐶', '🐱', '🍎', '🍋', '🎬', '🍔', '🍀', '🧀', '🍥', '🍧'];
+
+        const formatCurrency = (amount) => {
+            return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(amount);
+        };
+
+        const calculateDays = (start, end) => {
+            const date1 = new Date(start);
+            const date2 = new Date(end);
+            const diffTime = Math.abs(date2 - date1);
+            return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        };
+
+        const Modal = ({ isOpen, onClose, title, children }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-3 sm:p-4 fade-in">
+                    <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl flex flex-col max-h-[90vh]">
+                        <div className="flex justify-between items-center p-3 sm:p-5 border-b shrink-0">
+                            <h2 className="text-base sm:text-xl font-bold text-gray-800">{title}</h2>
+                            <button onClick={onClose} className="text-gray-500 hover:text-gray-800 transition-colors p-1">
+                                <i className="ph ph-x text-xl sm:text-2xl"></i>
+                            </button>
+                        </div>
+                        <div className="p-3 sm:p-5 overflow-y-auto">
+                            {children}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ConfirmDialog = ({ isOpen, message, onConfirm, onCancel }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 z-[60] flex justify-center items-center p-4 fade-in">
+                    <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6 text-center">
+                        <p className="text-gray-800 font-medium mb-6 whitespace-pre-line text-sm sm:text-base">{message}</p>
+                        <div className="flex gap-3 justify-center">
+                            <button onClick={onCancel} className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium text-sm">취소</button>
+                            <button onClick={onConfirm} className="flex-1 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium text-sm">확인</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const AuthScreen = ({ onLogin }) => {
+            const [isRegisterMode, setIsRegisterMode] = useState(false);
+            const [userId, setUserId] = useState('');
+            const [password, setPassword] = useState('');
+            const [nickname, setNickname] = useState('');
+            const [error, setError] = useState('');
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                setError('');
+
+                const cleanId = userId.trim();
+                if (!cleanId || !password) {
+                    setError('아이디와 비밀번호를 모두 입력해주세요.');
+                    return;
+                }
+
+                const usersDb = JSON.parse(localStorage.getItem('budgetApp_usersDb') || '{}');
+
+                if (isRegisterMode) {
+                    if (usersDb[cleanId]) {
+                        setError('이미 존재하는 아이디입니다.');
+                        return;
+                    }
+                    if (!nickname.trim()) {
+                        setError('닉네임을 입력해주세요.');
+                        return;
+                    }
+                    const newUser = {
+                        id: cleanId,
+                        password,
+                        profile: { name: nickname.trim(), emoji: '💻', image: '' },
+                        challenges: []
+                    };
+                    usersDb[cleanId] = newUser;
+                    localStorage.setItem('budgetApp_usersDb', JSON.stringify(usersDb));
+                    onLogin(cleanId);
+                } else {
+                    if (!usersDb[cleanId]) {
+                        setError('존재하지 않는 아이디입니다. 회원가입을 해주세요.');
+                        return;
+                    }
+                    if (usersDb[cleanId].password !== password) {
+                        setError('비밀번호가 일치하지 않습니다.');
+                        return;
+                    }
+                    onLogin(cleanId);
+                }
+            };
+
+            return (
+                <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-blue-500 to-indigo-700">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 sm:p-8 fade-in">
+                        <div className="text-center mb-6 sm:mb-8">
+                            <div className="inline-flex bg-blue-100 text-blue-600 p-3 sm:p-4 rounded-2xl mb-3 shadow-inner">
+                                <i className="ph-fill ph-wallet text-3xl sm:text-4xl"></i>
+                            </div>
+                            <h1 className="text-2xl sm:text-3xl font-black text-gray-800">긴축재정 챌린지</h1>
+                            <p className="text-gray-500 text-xs sm:text-sm mt-1">간편하게 아이디로 로그인하고 예산을 관리하세요</p>
+                        </div>
+
+                        <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
+                            <div>
+                                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">아이디</label>
+                                <input 
+                                    type="text" 
+                                    required 
+                                    value={userId} 
+                                    onChange={e => setUserId(e.target.value)}
+                                    className="w-full px-3 py-2 sm:px-4 sm:py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm sm:text-base"
+                                    placeholder="아이디를 입력하세요" 
+                                />
+                            </div>
+
+                            {isRegisterMode && (
+                                <div>
+                                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">닉네임</label>
+                                    <input 
+                                        type="text" 
+                                        required 
+                                        value={nickname} 
+                                        onChange={e => setNickname(e.target.value)}
+                                        className="w-full px-3 py-2 sm:px-4 sm:py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm sm:text-base"
+                                        placeholder="사용하실 닉네임" 
+                                    />
+                                </div>
+                            )}
+
+                            <div>
+                                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">비밀번호</label>
+                                <input 
+                                    type="password" 
+                                    required 
+                                    value={password} 
+                                    onChange={e => setPassword(e.target.value)}
+                                    className="w-full px-3 py-2 sm:px-4 sm:py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm sm:text-base"
+                                    placeholder="비밀번호를 입력하세요" 
+                                />
+                            </div>
+
+                            {error && <p className="text-red-500 text-xs sm:text-sm font-medium">{error}</p>}
+
+                            <button 
+                                type="submit" 
+                                className="w-full bg-blue-600 text-white py-2.5 sm:py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-lg text-sm sm:text-base mt-2"
+                            >
+                                {isRegisterMode ? '회원가입 완료' : '로그인'}
+                            </button>
+                        </form>
+
+                        <div className="mt-5 text-center">
+                            <button 
+                                onClick={() => { setIsRegisterMode(!isRegisterMode); setError(''); }}
+                                className="text-blue-600 hover:underline text-xs sm:text-sm font-medium"
+                            >
+                                {isRegisterMode ? '이미 계정이 있으신가요? 로그인하기' : '계정이 없으신가요? 회원가입하기'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ProfileSetup = ({ profile, onSave }) => {
+            const [name, setName] = useState(profile.name || '');
+            const [emoji, setEmoji] = useState(profile.emoji || '😊');
+            const [image, setImage] = useState(profile.image || '');
+            const fileInputRef = useRef(null);
+
+            const handleImageChange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    if (file.size > 2 * 1024 * 1024) {
+                        alert('이미지 파일 크기가 너무 큽니다 (2MB 이하 권장).');
+                        return;
+                    }
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        setImage(reader.result);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onSave({ name, emoji, image });
+            };
+
+            return (
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="flex flex-col items-center justify-center">
+                        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden bg-gray-100 border-2 border-blue-500 flex items-center justify-center mb-3 relative shadow-md">
+                            {image ? (
+                                <img src={image} alt="Profile" className="w-full h-full object-cover" />
+                            ) : (
+                                <span className="text-4xl sm:text-5xl">{emoji}</span>
+                            )}
+                        </div>
+                        <div className="flex gap-2">
+                            <button 
+                                type="button" 
+                                onClick={() => fileInputRef.current.click()}
+                                className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs sm:text-sm font-medium rounded-lg transition-colors"
+                            >
+                                사진 업로드
+                            </button>
+                            {image && (
+                                <button 
+                                    type="button" 
+                                    onClick={() => setImage('')}
+                                    className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-xs sm:text-sm font-medium rounded-lg transition-colors"
+                                >
+                                    사진 삭제
+                                </button>
+                            )}
+                        </div>
+                        <input 
+                            type="file" 
+                            ref={fileInputRef} 
+                            onChange={handleImageChange} 
+                            accept="image/*" 
+                            className="hidden" 
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">이모지 선택 (사진 없을 시 표시)</label>
+                        <div className="flex flex-wrap gap-1.5 sm:gap-2 justify-center bg-gray-50 p-2.5 sm:p-3 rounded-xl">
+                            {EMOJI_LIST.map(e => (
+                                <button 
+                                    key={e} 
+                                    type="button"
+                                    onClick={() => { setEmoji(e); setImage(''); }}
+                                    className={`text-2xl sm:text-3xl p-1 rounded-full transition-all ${emoji === e && !image ? 'bg-blue-100 ring-2 ring-blue-500 scale-110' : 'hover:bg-gray-200'}`}
+                                >
+                                    {e}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">닉네임</label>
+                        <input 
+                            type="text" 
+                            value={name} 
+                            onChange={(e) => setName(e.target.value)}
+                            required
+                            className="w-full px-3 py-2 sm:px-4 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm sm:text-base"
+                            placeholder="닉네임을 입력하세요"
+                        />
+                    </div>
+
+                    <button type="submit" className="w-full bg-blue-600 text-white py-2.5 sm:py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors text-sm sm:text-base">
+                        저장하기
+                    </button>
+                </form>
+            );
+        };
+
+        const ChallengeForm = ({ initialData, onSave }) => {
+            const [title, setTitle] = useState(initialData?.title || '');
+            const [budget, setBudget] = useState(initialData?.budget || '');
+            const [startDate, setStartDate] = useState(initialData?.startDate || new Date().toISOString().split('T')[0]);
+            
+            const defaultEndDate = new Date();
+            defaultEndDate.setDate(defaultEndDate.getDate() + 30);
+            const [endDate, setEndDate] = useState(initialData?.endDate || defaultEndDate.toISOString().split('T')[0]);
+            
+            const [categories, setCategories] = useState(initialData?.categories || DEFAULT_CATEGORIES);
+            const [newCategory, setNewCategory] = useState('');
+            const [error, setError] = useState('');
+
+            const handleAddCategory = () => {
+                if (newCategory.trim() && !categories.includes(newCategory.trim())) {
+                    setCategories([...categories, newCategory.trim()]);
+                    setNewCategory('');
+                }
+            };
+
+            const handleRemoveCategory = (catToRemove) => {
+                setCategories(categories.filter(c => c !== catToRemove));
+            };
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (new Date(startDate) > new Date(endDate)) {
+                    setError('종료일은 시작일 이후여야 합니다.');
+                    return;
+                }
+                setError('');
+                onSave({
+                    id: initialData?.id || Date.now().toString(),
+                    title,
+                    budget: Number(budget),
+                    startDate,
+                    endDate,
+                    categories,
+                    expenses: initialData?.expenses || [],
+                    createdAt: initialData?.createdAt || new Date().toISOString()
+                });
+            };
+
+            return (
+                <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
+                    <div>
+                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">챌린지 이름</label>
+                        <input type="text" required value={title} onChange={e => setTitle(e.target.value)}
+                            className="w-full px-3 py-2 sm:px-4 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm sm:text-base"
+                            placeholder="예: 한 달 식비 30만원 살기" />
+                    </div>
+                    
+                    <div>
+                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">목표 예산 (원)</label>
+                        <input type="number" required min="0" value={budget} onChange={e => setBudget(e.target.value)}
+                            className="w-full px-3 py-2 sm:px-4 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm sm:text-base"
+                            placeholder="숫자만 입력" />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
+                        <div>
+                            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">시작일</label>
+                            <input type="date" required value={startDate} onChange={e => setStartDate(e.target.value)}
+                                className="w-full px-3 py-2 sm:px-4 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-xs sm:text-sm" />
+                        </div>
+                        <div>
+                            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">종료일</label>
+                            <input type="date" required value={endDate} onChange={e => setEndDate(e.target.value)}
+                                className="w-full px-3 py-2 sm:px-4 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-xs sm:text-sm" />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">카테고리 설정</label>
+                        <div className="flex gap-2 mb-2">
+                            <input type="text" value={newCategory} onChange={e => setNewCategory(e.target.value)}
+                                onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), handleAddCategory())}
+                                className="flex-1 px-3 py-1.5 sm:px-4 sm:py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-xs sm:text-sm"
+                                placeholder="새 카테고리 추가" />
+                            <button type="button" onClick={handleAddCategory} className="bg-gray-200 px-3 py-1.5 sm:py-2 rounded-lg hover:bg-gray-300 text-xs sm:text-sm font-medium">
+                                추가
+                            </button>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1.5 bg-gray-50 rounded-lg">
+                            {categories.map(cat => (
+                                <span key={cat} className="inline-flex items-center bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full text-xs font-medium">
+                                    {cat}
+                                    <button type="button" onClick={() => handleRemoveCategory(cat)} className="ml-1.5 text-blue-400 hover:text-blue-900 focus:outline-none">
+                                        &times;
+                                    </button>
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+
+                    {error && <p className="text-red-500 text-xs sm:text-sm font-medium">{error}</p>}
+
+                    <button type="submit" className="w-full bg-blue-600 text-white py-2.5 sm:py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors text-sm sm:text-base mt-2">
+                        {initialData ? '수정 완료' : '챌린지 시작하기'}
+                    </button>
+                </form>
+            );
+        };
+
+        const ExpenseForm = ({ categories, initialData, onSaveExpense, onCancelEdit }) => {
+            const [amount, setAmount] = useState(initialData?.amount || '');
+            const [category, setCategory] = useState(initialData?.category || categories[0] || '');
+            const [date, setDate] = useState(initialData?.date || new Date().toISOString().split('T')[0]);
+            const [note, setNote] = useState(initialData?.note || '');
+
+            useEffect(() => {
+                if (initialData) {
+                    setAmount(initialData.amount);
+                    setCategory(initialData.category);
+                    setDate(initialData.date);
+                    setNote(initialData.note || '');
+                } else {
+                    setAmount('');
+                    setNote('');
+                }
+            }, [initialData]);
+
+            useEffect(() => {
+                if (categories.length > 0 && !categories.includes(category)) {
+                    setCategory(categories[0]);
+                }
+            }, [categories]);
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onSaveExpense({
+                    id: initialData ? initialData.id : Date.now().toString(),
+                    amount: Number(amount),
+                    category,
+                    date,
+                    note
+                });
+                if (!initialData) {
+                    setAmount('');
+                    setNote('');
+                }
+            };
+
+            return (
+                <div className="glass-panel p-4 sm:p-6 rounded-2xl">
+                    <h3 className="text-base sm:text-lg font-bold text-gray-800 mb-3 sm:mb-4 flex items-center justify-between">
+                        <span className="flex items-center">
+                            <i className="ph-fill ph-receipt text-blue-500 mr-2 text-xl"></i>
+                            {initialData ? '지출 내역 수정' : '지출 기록하기'}
+                        </span>
+                        {initialData && (
+                            <button onClick={onCancelEdit} className="text-xs text-gray-500 hover:text-gray-800 underline">
+                                수정 취소
+                            </button>
+                        )}
+                    </h3>
+                    <form onSubmit={handleSubmit} className="space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label className="block text-xs sm:text-sm font-medium text-gray-600 mb-1">금액</label>
+                                <div className="relative">
+                                    <input type="number" required min="1" value={amount} onChange={e => setAmount(e.target.value)}
+                                        className="w-full pl-3 pr-10 py-2 sm:pl-4 sm:py-2.5 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-base sm:text-lg font-bold"
+                                        placeholder="0" />
+                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 font-medium text-xs sm:text-sm">원</span>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs sm:text-sm font-medium text-gray-600 mb-1">카테고리</label>
+                                <select required value={category} onChange={e => setCategory(e.target.value)}
+                                    className="w-full px-3 py-2 sm:px-4 sm:py-2.5 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white text-sm">
+                                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label className="block text-xs sm:text-sm font-medium text-gray-600 mb-1">날짜</label>
+                                <input type="date" required value={date} onChange={e => setDate(e.target.value)}
+                                    className="w-full px-3 py-2 sm:px-4 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-xs sm:text-sm" />
+                            </div>
+                            <div>
+                                <label className="block text-xs sm:text-sm font-medium text-gray-600 mb-1">내용 (선택)</label>
+                                <input type="text" value={note} onChange={e => setNote(e.target.value)}
+                                    className="w-full px-3 py-2 sm:px-4 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-xs sm:text-sm"
+                                    placeholder="어디서 썼나요?" />
+                            </div>
+                        </div>
+
+                        <button type="submit" className={`w-full text-white py-2.5 rounded-xl font-bold transition-colors flex justify-center items-center text-sm mt-1 ${initialData ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                            <i className={`ph-bold ${initialData ? 'ph-check' : 'ph-plus'} mr-1.5`}></i> {initialData ? '지출 수정 완료' : '지출 추가'}
+                        </button>
+                    </form>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [currentUserId, setCurrentUserId] = useState(null);
+            const [usersDb, setUsersDb] = useState({});
+            const [isLoaded, setIsLoaded] = useState(false);
+
+            const [activeChallengeId, setActiveChallengeId] = useState(null);
+            const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+            const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);
+            const [editingChallengeId, setEditingChallengeId] = useState(null);
+            const [editingExpense, setEditingExpense] = useState(null);
+            const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, message: '', onConfirm: null });
+
+            useEffect(() => {
+                const db = JSON.parse(localStorage.getItem('budgetApp_usersDb') || '{}');
+                setUsersDb(db);
+                const savedSession = localStorage.getItem('budgetApp_currentUserId');
+                if (savedSession && db[savedSession]) {
+                    setCurrentUserId(savedSession);
+                    if (db[savedSession].challenges?.length > 0) {
+                        setActiveChallengeId(db[savedSession].challenges[0].id);
+                    }
+                }
+                setIsLoaded(true);
+            }, []);
+
+            const updateUserData = (newUserId, newProfile, newChallenges) => {
+                const updatedDb = JSON.parse(localStorage.getItem('budgetApp_usersDb') || '{}');
+                if (updatedDb[newUserId]) {
+                    if (newProfile !== null && newProfile !== undefined) {
+                        updatedDb[newUserId].profile = newProfile;
+                    }
+                    if (newChallenges !== null && newChallenges !== undefined) {
+                        updatedDb[newUserId].challenges = newChallenges;
+                    }
+                    
+                    localStorage.setItem('budgetApp_usersDb', JSON.stringify(updatedDb));
+                    setUsersDb({ ...updatedDb });
+                }
+            };
+
+            const currentUserData = useMemo(() => {
+                if (!currentUserId || !usersDb[currentUserId]) return null;
+                return usersDb[currentUserId];
+            }, [currentUserId, usersDb]);
+
+            const activeChallenge = useMemo(() => {
+                if (!currentUserData || !currentUserData.challenges) return null;
+                return currentUserData.challenges.find(c => c.id === activeChallengeId) || currentUserData.challenges[0] || null;
+            }, [currentUserData, activeChallengeId]);
+
+            const challengeStats = useMemo(() => {
+                if (!activeChallenge) return null;
+                
+                const totalSpent = (activeChallenge.expenses || []).reduce((sum, exp) => sum + exp.amount, 0);
+                const remaining = activeChallenge.budget - totalSpent;
+                const percentSpent = Math.min(100, (totalSpent / activeChallenge.budget) * 100);
+                
+                const today = new Date().toISOString().split('T')[0];
+                const totalDays = calculateDays(activeChallenge.startDate, activeChallenge.endDate);
+                const daysPassed = calculateDays(activeChallenge.startDate, today > activeChallenge.endDate ? activeChallenge.endDate : today) - 1;
+                const daysRemaining = totalDays - daysPassed;
+                
+                const recommendedDaily = daysRemaining > 0 ? (remaining > 0 ? remaining / daysRemaining : 0) : 0;
+
+                return { totalSpent, remaining, percentSpent, totalDays, daysRemaining, recommendedDaily };
+            }, [activeChallenge]);
+
+            const handleLogin = (userId) => {
+                const db = JSON.parse(localStorage.getItem('budgetApp_usersDb') || '{}');
+                setUsersDb(db);
+                setCurrentUserId(userId);
+                localStorage.setItem('budgetApp_currentUserId', userId);
+                if (db[userId]?.challenges?.length > 0) {
+                    setActiveChallengeId(db[userId].challenges[0].id);
+                }
+            };
+
+            const handleLogout = () => {
+                setCurrentUserId(null);
+                setActiveChallengeId(null);
+                localStorage.removeItem('budgetApp_currentUserId');
+            };
+
+            const saveProfile = (newProfile) => {
+                updateUserData(currentUserId, newProfile, null);
+                setIsProfileModalOpen(false);
+            };
+
+            const saveChallenge = (challengeData) => {
+                const challenges = currentUserData.challenges || [];
+                let updatedChallenges;
+                if (editingChallengeId) {
+                    updatedChallenges = challenges.map(c => c.id === challengeData.id ? challengeData : c);
+                } else {
+                    updatedChallenges = [challengeData, ...challenges];
+                    setActiveChallengeId(challengeData.id);
+                }
+                updateUserData(currentUserId, null, updatedChallenges);
+                setIsChallengeModalOpen(false);
+                setEditingChallengeId(null);
+            };
+
+            const handleSaveExpense = (expenseData) => {
+                const challenges = currentUserData.challenges || [];
+                const updatedChallenges = challenges.map(c => {
+                    if (c.id === (activeChallenge?.id)) {
+                        let updatedExpenses = c.expenses || [];
+                        if (editingExpense) {
+                            updatedExpenses = updatedExpenses.map(e => e.id === expenseData.id ? expenseData : e);
+                        } else {
+                            updatedExpenses = [expenseData, ...updatedExpenses];
+                        }
+                        updatedExpenses.sort((a, b) => new Date(b.date) - new Date(a.date));
+                        return { ...c, expenses: updatedExpenses };
+                    }
+                    return c;
+                });
+                updateUserData(currentUserId, null, updatedChallenges);
+                setEditingExpense(null);
+            };
+
+            const deleteExpense = (expenseId) => {
+                setConfirmConfig({
+                    isOpen: true,
+                    message: "정말로 이 지출 내역을 삭제하시겠습니까?",
+                    onConfirm: () => {
+                        const challenges = currentUserData.challenges || [];
+                        const updatedChallenges = challenges.map(c => {
+                            if (c.id === activeChallenge?.id) {
+                                return { ...c, expenses: (c.expenses || []).filter(e => e.id !== expenseId) };
+                            }
+                            return c;
+                        });
+                        updateUserData(currentUserId, null, updatedChallenges);
+                        if (editingExpense?.id === expenseId) {
+                            setEditingExpense(null);
+                        }
+                        setConfirmConfig({ isOpen: false, message: '', onConfirm: null });
+                    }
+                });
+            };
+
+            const openEditChallenge = (challenge) => {
+                setEditingChallengeId(challenge.id);
+                setIsChallengeModalOpen(true);
+            };
+
+            const openCreateChallenge = () => {
+                setEditingChallengeId(null);
+                setIsChallengeModalOpen(true);
+            };
+
+            const deleteChallenge = (id) => {
+                setConfirmConfig({
+                    isOpen: true,
+                    message: "이 챌린지와 모든 지출 내역을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.",
+                    onConfirm: () => {
+                        const challenges = currentUserData.challenges || [];
+                        const updated = challenges.filter(c => c.id !== id);
+                        updateUserData(currentUserId, null, updated);
+                        if (activeChallenge?.id === id) {
+                            setActiveChallengeId(updated.length > 0 ? updated[0].id : null);
+                        }
+                        setConfirmConfig({ isOpen: false, message: '', onConfirm: null });
+                    }
+                });
+            };
+
+            if (!isLoaded) return <div className="h-screen flex justify-center items-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>;
+
+            if (!currentUserId || !currentUserData) {
+                return <AuthScreen onLogin={handleLogin} />;
+            }
+
+            const profile = currentUserData.profile || { name: '사용자', emoji: '😊', image: '' };
+            const challenges = currentUserData.challenges || [];
+
+            return (
+                <div className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-8 min-h-screen flex flex-col gap-4 sm:gap-6">
+                    {/* Header */}
+                    <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 bg-white p-3.5 sm:p-6 rounded-2xl shadow-sm">
+                        <div className="flex items-center gap-3 cursor-pointer group" onClick={() => setIsProfileModalOpen(true)}>
+                            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center border group-hover:scale-105 transition-transform shrink-0 shadow-sm">
+                                {profile.image ? (
+                                    <img src={profile.image} alt="Profile" className="w-full h-full object-cover" />
+                                ) : (
+                                    <span className="text-2xl">{profile.emoji || '😊'}</span>
+                                )}
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <p className="text-[11px] sm:text-xs text-gray-400 font-medium">ID: {currentUserId}</p>
+                                    <button onClick={(e) => { e.stopPropagation(); handleLogout(); }} className="text-[11px] sm:text-xs text-red-500 hover:underline">로그아웃</button>
+                                </div>
+                                <h1 className="text-base sm:text-xl font-bold text-gray-800 flex items-center gap-1">
+                                    {profile.name}님
+                                    <i className="ph ph-pencil-simple text-gray-400 group-hover:text-blue-500 text-xs"></i>
+                                </h1>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                            {challenges.length > 0 ? (
+                                <div className="relative flex-1 sm:min-w-[180px]">
+                                    <select 
+                                        value={activeChallenge?.id || ''} 
+                                        onChange={(e) => setActiveChallengeId(e.target.value)}
+                                        className="w-full appearance-none bg-blue-50 border-blue-100 border text-blue-800 py-2 pl-3 pr-8 rounded-xl font-bold text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 truncate"
+                                    >
+                                        {challenges.map(c => (
+                                            <option key={c.id} value={c.id}>{c.title}</option>
+                                        ))}
+                                    </select>
+                                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-blue-500">
+                                        <i className="ph-bold ph-caret-down text-xs"></i>
+                                    </div>
+                                </div>
+                            ) : (
+                                <p className="text-xs text-gray-500 flex-1">진행 중인 챌린지가 없습니다.</p>
+                            )}
+                            
+                            <button onClick={openCreateChallenge} className="bg-blue-600 text-white p-2.5 rounded-xl hover:bg-blue-700 transition-colors shadow-md flex-shrink-0" title="새 챌린지 생성">
+                                <i className="ph-bold ph-plus text-base"></i>
+                            </button>
+                        </div>
+                    </header>
+
+                    {/* Main Content Area */}
+                    {!activeChallenge ? (
+                        <div className="flex-1 flex flex-col items-center justify-center text-center p-8 sm:p-12 bg-white rounded-2xl border-2 border-dashed border-gray-200">
+                            <i className="ph-duotone ph-target text-5xl sm:text-6xl text-gray-300 mb-3"></i>
+                            <h2 className="text-xl sm:text-2xl font-bold text-gray-700 mb-2">새로운 도전을 시작해보세요!</h2>
+                            <p className="text-gray-500 text-xs sm:text-sm mb-6">목표 예산을 설정하고 지출을 관리하여 목표를 달성하세요.</p>
+                            <button onClick={openCreateChallenge} className="bg-blue-600 text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl font-bold hover:bg-blue-700 shadow-lg transition-all text-sm">
+                                챌린지 만들기
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+                            {/* Left Column: Dashboard & Input */}
+                            <div className="lg:col-span-2 space-y-4 sm:space-y-6">
+                                <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl p-4 sm:p-7 text-white shadow-xl relative overflow-hidden">
+                                    <div className="absolute -top-10 -right-10 w-40 h-40 bg-white opacity-10 rounded-full blur-2xl"></div>
+                                    <div className="absolute bottom-0 left-0 w-32 h-32 bg-blue-400 opacity-20 rounded-full blur-xl translate-y-1/2 -translate-x-1/4"></div>
+
+                                    <div className="relative z-10">
+                                        <div className="flex justify-between items-start mb-4 sm:mb-5">
+                                            <div>
+                                                <div className="inline-block px-2.5 py-0.5 bg-white/20 rounded-full text-[11px] sm:text-xs font-semibold backdrop-blur-sm mb-1">
+                                                    D-{Math.max(0, challengeStats.daysRemaining)}
+                                                </div>
+                                                <h2 className="text-lg sm:text-2xl font-bold">{activeChallenge.title}</h2>
+                                                <p className="text-blue-100 text-[11px] sm:text-xs mt-0.5">
+                                                    {activeChallenge.startDate} ~ {activeChallenge.endDate}
+                                                </p>
+                                            </div>
+                                            <div className="flex gap-1.5">
+                                                <button onClick={() => openEditChallenge(activeChallenge)} className="p-1.5 sm:p-2 bg-white/10 hover:bg-white/20 rounded-lg backdrop-blur-sm transition-colors" title="수정">
+                                                    <i className="ph-bold ph-pencil-simple text-xs sm:text-sm"></i>
+                                                </button>
+                                                <button onClick={() => deleteChallenge(activeChallenge.id)} className="p-1.5 sm:p-2 bg-red-500/80 hover:bg-red-500 rounded-lg backdrop-blur-sm transition-colors" title="삭제">
+                                                    <i className="ph-bold ph-trash text-xs sm:text-sm"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3.5 sm:p-5 mb-4 sm:mb-5">
+                                            <div className="flex justify-between items-end mb-2">
+                                                <span className="text-blue-100 text-xs sm:text-sm font-medium">남은 예산</span>
+                                                <span className={`text-xl sm:text-3xl font-bold ${challengeStats.remaining < 0 ? 'text-red-300' : 'text-white'}`}>
+                                                    {formatCurrency(challengeStats.remaining)}
+                                                </span>
+                                            </div>
+                                            
+                                            <div className="h-2 sm:h-2.5 w-full bg-black/20 rounded-full overflow-hidden mt-2.5 sm:mt-3">
+                                                <div 
+                                                    className={`h-full rounded-full transition-all duration-1000 ${challengeStats.percentSpent > 90 ? 'bg-red-400' : challengeStats.percentSpent > 70 ? 'bg-yellow-400' : 'bg-green-400'}`}
+                                                    style={{ width: `${challengeStats.percentSpent}%` }}
+                                                ></div>
+                                            </div>
+                                            <div className="flex justify-between text-[11px] sm:text-xs text-blue-100 mt-1.5 sm:mt-2 font-medium">
+                                                <span>지출 {formatCurrency(challengeStats.totalSpent)}</span>
+                                                <span>목표 {formatCurrency(activeChallenge.budget)}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+                                            <div className="bg-white/10 p-3 sm:p-4 rounded-xl backdrop-blur-sm">
+                                                <p className="text-[10px] sm:text-[11px] text-blue-200 mb-0.5">오늘 권장 지출액</p>
+                                                <p className="text-xs sm:text-base font-bold">{formatCurrency(Math.floor(challengeStats.recommendedDaily))}</p>
+                                            </div>
+                                            <div className="bg-white/10 p-3 sm:p-4 rounded-xl backdrop-blur-sm">
+                                                <p className="text-[10px] sm:text-[11px] text-blue-200 mb-0.5">사용 비율</p>
+                                                <p className="text-xs sm:text-base font-bold">{challengeStats.percentSpent.toFixed(1)}%</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <ExpenseForm 
+                                    categories={activeChallenge.categories} 
+                                    initialData={editingExpense} 
+                                    onSaveExpense={handleSaveExpense} 
+                                    onCancelEdit={() => setEditingExpense(null)} 
+                                />
+                            </div>
+
+                            {/* Right Column: Expense History */}
+                            <div className="lg:col-span-1 glass-panel rounded-3xl p-4 sm:p-5 flex flex-col h-[450px] sm:h-[580px]">
+                                <div className="flex justify-between items-center mb-3 sm:mb-4 shrink-0">
+                                    <h3 className="text-sm sm:text-lg font-bold text-gray-800 flex items-center">
+                                        <i className="ph-fill ph-list-dashes text-indigo-500 mr-2 text-lg sm:text-xl"></i>
+                                        지출 내역
+                                    </h3>
+                                    <span className="bg-gray-100 text-gray-600 text-[11px] sm:text-xs px-2 py-0.5 rounded-full font-semibold">
+                                        총 {(activeChallenge.expenses || []).length}건
+                                    </span>
+                                </div>
+                                
+                                <div className="flex-1 overflow-y-auto pr-1 space-y-2.5 sm:space-y-3">
+                                    {(!activeChallenge.expenses || activeChallenge.expenses.length === 0) ? (
+                                        <div className="h-full flex flex-col items-center justify-center text-gray-400 py-12">
+                                            <i className="ph-duotone ph-receipt text-4xl mb-2"></i>
+                                            <p className="text-xs sm:text-sm">아직 등록된 지출이 없습니다.</p>
+                                        </div>
+                                    ) : (
+                                        activeChallenge.expenses.map(expense => (
+                                            <div key={expense.id} className="bg-white p-3 sm:p-3.5 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow group flex justify-between items-center fade-in">
+                                                <div className="flex-1 min-w-0 pr-2">
+                                                    <div className="flex items-center flex-wrap gap-1 mb-1">
+                                                        <span className="text-[10px] sm:text-[11px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded whitespace-nowrap break-keep shrink-0">
+                                                            {expense.category}
+                                                        </span>
+                                                        <span className="text-[10px] sm:text-[11px] text-gray-400 font-medium whitespace-nowrap shrink-0">
+                                                            {expense.date}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-gray-800 font-bold truncate text-sm sm:text-base">
+                                                        -{formatCurrency(expense.amount)}
+                                                    </p>
+                                                    {expense.note && (
+                                                        <p className="text-xs text-gray-500 truncate mt-0.5">{expense.note}</p>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all shrink-0">
+                                                    <button 
+                                                        onClick={() => setEditingExpense(expense)}
+                                                        className="w-7 h-7 rounded-full flex items-center justify-center text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors"
+                                                        title="수정"
+                                                    >
+                                                        <i className="ph-bold ph-pencil-simple text-xs"></i>
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => deleteExpense(expense.id)}
+                                                        className="w-7 h-7 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                                                        title="삭제"
+                                                    >
+                                                        <i className="ph-bold ph-trash text-xs"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Modals */}
+                    <Modal 
+                        isOpen={isProfileModalOpen} 
+                        onClose={() => setIsProfileModalOpen(false)}
+                        title="프로필 설정"
+                    >
+                        <ProfileSetup profile={profile} onSave={saveProfile} />
+                    </Modal>
+
+                    <Modal 
+                        isOpen={isChallengeModalOpen} 
+                        onClose={() => setIsChallengeModalOpen(false)}
+                        title={editingChallengeId ? "챌린지 수정" : "새 챌린지 만들기"}
+                    >
+                        <ChallengeForm 
+                            initialData={editingChallengeId ? challenges.find(c => c.id === editingChallengeId) : null} 
+                            onSave={saveChallenge} 
+                        />
+                    </Modal>
+
+                    <ConfirmDialog 
+                        isOpen={confirmConfig.isOpen}
+                        message={confirmConfig.message}
+                        onConfirm={confirmConfig.onConfirm}
+                        onCancel={() => setConfirmConfig({ isOpen: false, message: '', onConfirm: null })}
+                    />
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
