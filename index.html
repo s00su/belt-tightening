@@ -53,6 +53,159 @@
             border: 1px solid rgba(255, 255, 255, 0.2);
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
         }
+
+        /* ===== macOS-inspired UI ===== */
+        :root {
+            --mac-bg: #f5f5f7;
+            --mac-surface: rgba(255,255,255,.78);
+            --mac-border: rgba(0,0,0,.08);
+            --mac-text: #1d1d1f;
+            --mac-muted: #6e6e73;
+            --mac-blue: #007aff;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+                         "Apple SD Gothic Neo", "Noto Sans KR", sans-serif !important;
+            color: var(--mac-text);
+            background:
+                radial-gradient(circle at 15% 10%, rgba(255,255,255,.95), transparent 30%),
+                radial-gradient(circle at 90% 80%, rgba(210,220,255,.7), transparent 35%),
+                linear-gradient(135deg,#e9edf3 0%,#f7f7f8 45%,#e5e9f0 100%) !important;
+            min-height: 100vh;
+        }
+        button, input, select { font-family: inherit; }
+        .max-w-4xl {
+            max-width: 1180px !important;
+            padding-top: 28px !important;
+            padding-bottom: 28px !important;
+        }
+        /* Main app window */
+        .max-w-4xl {
+            background: rgba(255,255,255,.58);
+            border: 1px solid rgba(255,255,255,.75);
+            border-radius: 20px;
+            box-shadow: 0 30px 80px rgba(0,0,0,.12), 0 2px 8px rgba(0,0,0,.05);
+            backdrop-filter: blur(28px) saturate(150%);
+            -webkit-backdrop-filter: blur(28px) saturate(150%);
+            overflow: hidden;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+            gap: 0 !important;
+        }
+        /* macOS title bar */
+        .max-w-4xl::before {
+            content: "●   ●   ●";
+            display: block;
+            height: 42px;
+            padding: 11px 16px;
+            font-size: 13px;
+            letter-spacing: 1px;
+            color: transparent;
+            background:
+                radial-gradient(circle at 18px 21px,#ff5f57 0 6px,transparent 6.5px),
+                radial-gradient(circle at 38px 21px,#febc2e 0 6px,transparent 6.5px),
+                radial-gradient(circle at 58px 21px,#28c840 0 6px,transparent 6.5px),
+                rgba(246,246,247,.72);
+            border-bottom: 1px solid rgba(0,0,0,.07);
+            flex: none;
+        }
+        .max-w-4xl > header {
+            margin: 0 !important;
+            border-radius: 0 !important;
+            background: rgba(250,250,252,.72) !important;
+            border-bottom: 1px solid rgba(0,0,0,.06);
+            box-shadow: none !important;
+            padding: 15px 22px !important;
+        }
+        .max-w-4xl > header h1 { color:#1d1d1f !important; font-weight:700 !important; }
+        .max-w-4xl > header select {
+            background: rgba(118,118,128,.12) !important;
+            border: 0 !important;
+            color:#1d1d1f !important;
+            border-radius: 9px !important;
+        }
+        .max-w-4xl > header button.bg-blue-600 {
+            background: #007aff !important;
+            border-radius: 9px !important;
+            box-shadow: 0 2px 5px rgba(0,122,255,.25) !important;
+        }
+        .max-w-4xl > div:not(.hidden) { padding-left:22px; padding-right:22px; padding-bottom:22px; }
+        /* cards */
+        .glass-panel, .max-w-4xl .bg-white {
+            background: rgba(255,255,255,.78) !important;
+            border: 1px solid rgba(0,0,0,.06) !important;
+            box-shadow: 0 8px 24px rgba(0,0,0,.055) !important;
+            backdrop-filter: blur(22px);
+            -webkit-backdrop-filter: blur(22px);
+        }
+        .max-w-4xl .rounded-3xl { border-radius: 16px !important; }
+        .max-w-4xl .rounded-2xl { border-radius: 13px !important; }
+        .max-w-4xl .rounded-xl { border-radius: 10px !important; }
+        /* primary dashboard card */
+        .max-w-4xl .bg-gradient-to-br {
+            background: linear-gradient(135deg,#0a84ff 0%,#5856d6 100%) !important;
+            box-shadow: 0 14px 35px rgba(88,86,214,.22) !important;
+        }
+        /* buttons */
+        .max-w-4xl .bg-blue-600 {
+            background: #007aff !important;
+        }
+        .max-w-4xl .bg-blue-600:hover { background:#006fe6 !important; }
+        .max-w-4xl input, .max-w-4xl select {
+            background: rgba(118,118,128,.08) !important;
+            border: 1px solid rgba(0,0,0,.08) !important;
+            border-radius: 9px !important;
+            transition: .18s ease;
+        }
+        .max-w-4xl input:focus, .max-w-4xl select:focus {
+            box-shadow: 0 0 0 3px rgba(0,122,255,.18) !important;
+            border-color: rgba(0,122,255,.55) !important;
+        }
+        /* expense rows */
+        .max-w-4xl .group.bg-white {
+            background: rgba(255,255,255,.68) !important;
+            box-shadow: none !important;
+            transition: transform .18s ease, background .18s ease, box-shadow .18s ease;
+        }
+        .max-w-4xl .group.bg-white:hover {
+            transform: translateY(-1px);
+            background: rgba(255,255,255,.92) !important;
+            box-shadow: 0 6px 18px rgba(0,0,0,.07) !important;
+        }
+        /* modal */
+        .fixed.inset-0.bg-black {
+            background: rgba(0,0,0,.28) !important;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+        .fixed.inset-0.bg-black > div {
+            background: rgba(250,250,252,.94) !important;
+            border: 1px solid rgba(255,255,255,.7);
+            box-shadow: 0 25px 70px rgba(0,0,0,.22) !important;
+            border-radius: 17px !important;
+        }
+        /* login */
+        body > #root > div.min-h-screen {
+            background:
+                radial-gradient(circle at 20% 15%, rgba(255,255,255,.9), transparent 32%),
+                linear-gradient(135deg,#e8ecf3,#f7f7f8,#dfe5ef) !important;
+        }
+        body > #root > div.min-h-screen > div.bg-white {
+            background: rgba(255,255,255,.78) !important;
+            border: 1px solid rgba(255,255,255,.85) !important;
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            box-shadow: 0 30px 80px rgba(0,0,0,.14) !important;
+            border-radius: 18px !important;
+        }
+        @media (max-width: 640px) {
+            .max-w-4xl { margin: 10px !important; border-radius: 16px; }
+            .max-w-4xl > header { padding: 13px 15px !important; }
+            .max-w-4xl > div:not(.hidden) { padding-left:14px; padding-right:14px; padding-bottom:14px; }
+            .max-w-4xl::before { height:36px; padding:8px 12px; }
+        }
+
     </style>
 </head>
 <body>
